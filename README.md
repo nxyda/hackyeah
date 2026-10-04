@@ -127,6 +127,25 @@ repozytorium, zbudować i zainstalować aplikację na uruchomionym emulatorze:
 komputera. Zostaw backend uruchomiony w pierwszym terminalu. W aplikacji
 żądania API powinny teraz trafiać do tego lokalnego serwera.
 
+## 3. Zbuduj APK do przekazania
+
+Przed budowaniem upewnij się, że skonfigurowałeś w
+`hackyeah-frontend\local.properties` tokeny Mapbox i `API_BASE_URL`, a backend
+działa pod skonfigurowanym adresem. W Android Studio wybierz JDK 17 jako Gradle
+JDK. Następnie, z katalogu głównego repozytorium, uruchom:
+
+```powershell
+.\hackyeah-frontend\gradlew.bat -p .\hackyeah-frontend :app:assembleDebug
+```
+
+Gotowy APK znajdziesz pod
+`hackyeah-frontend\app\build\outputs\apk\debug\app-debug.apk`. To build
+debugowy do demonstracji i instalacji testowej, nie podpisany build release.
+Jeśli organizator wymaga podpisanego APK, AAB albo konkretnego formatu
+publikacji, sprawdź wymagania i zbuduj właściwy wariant — nie wysyłaj debugowego
+APK jako release. Build APK zawiera publiczny token `MAPBOX_ACCESS_TOKEN`
+i wbudowany adres API, ale nie zawiera sekretnego `MAPBOX_DOWNLOADS_TOKEN`.
+
 ## Połączenie z fizycznym telefonem
 
 Telefon i komputer muszą być w tej samej sieci Wi-Fi. Odczytaj IPv4 komputera
