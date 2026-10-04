@@ -1,0 +1,1609 @@
+openapi: 3.1.0
+
+info:
+  title: Safe Route API
+  version: 0.1.0
+  description: Safe Route HTTP API. Business endpoints use the `/v1` prefix; `/health` reports service status.
+servers:
+  - url: http://127.0.0.1:8000
+    description: Lokalny serwer developerski
+
+tags:
+  - name: System
+    description: Diagnostyka.
+  - name: Uwierzytelnianie
+    description: Rejestracja i logowanie.
+  - name: Zgłoszenia
+    description: Lista, tworzenie, edycja, usuwanie i potwierdzanie zgłoszeń.
+  - name: Bezpieczne miejsca
+    description: Wyszukiwanie i szczegóły bezpiecznych miejsc.
+  - name: Udostępnianie lokalizacji
+    description: Tworzenie, odczyt, aktualizacja i unieważnianie udostępnień.
+  - name: Trasy
+    description: Wyznaczanie tras pieszych.
+  - name: Administracja
+    description: Zarządzanie kontami użytkowników.
+
+paths:
+  /v1/admin/users:
+    get:
+      tags: [Administracja]
+      operationId: adminListUsers
+      summary: Lista użytkowników
+      description: Zwraca listę użytkowników bez hashy haseł.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Użytkownicy bez hashy haseł.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/admin/users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        description: Identyfikator konta użytkownika.
+        schema:
+          type: integer
+    patch:
+      tags: [Administracja]
+      operationId: adminUpdateUser
+      summary: Zmień dane, rolę lub status użytkownika
+      description: Aktualizuje podane pola. `null` czyści imię lub nazwisko; ostatniego aktywnego administratora nie można wyłączyć ani zdegradować.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserUpdate"
+            example:
+              role: admin
+              is_active: true
+      responses:
+        "200":
+          description: Zaktualizowane konto.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "409":
+          $ref: "#/components/responses/LastAdminConflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+    delete:
+      tags: [Administracja]
+      operationId: adminDeleteUser
+      summary: Usuń konto użytkownika
+      description: Usuwa konto i powiązane dane. Nie można usunąć własnego konta ani ostatniego aktywnego administratora.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Konto usunięte.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "409":
+          $ref: "#/components/responses/LastAdminConflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/admin/users/{user_id}/password:
+    put:
+      tags: [Administracja]
+      operationId: adminSetUserPassword
+      summary: Ustaw hasło użytkownika
+      description: Ustawia hasło lokalne użytkownika (12–1024 znaki).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: Identyfikator konta użytkownika.
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  minLength: 12
+                  maxLength: 1024
+                  format: password
+                  writeOnly: true
+            example:
+              password: new-long-secure-password
+      responses:
+        "204":
+          description: Hasło ustawione.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: Sprawdź stan API
+      description: Zwraca stan usługi, wersję aplikacji, hash commita i tryb API.
+      responses:
+        "200":
+          description: API działa.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                version: 0.1.0
+                commit: a1b2c3d
+                mode: live
+
+  /v1/auth/login:
+    post:
+      tags: [Uwierzytelnianie]
+      operationId: login
+      summary: Zaloguj użytkownika
+      description: Returns a short-lived JWT access token for the supplied email and password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: user@example.com
+              password: correct-horse-battery-staple
+      responses:
+        "200":
+          description: Użytkownik zalogowany.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+              example:
+                access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                token_type: bearer
+                expires_in: 900
+        "401":
+          description: Nieprawidłowy adres e-mail lub hasło.
+          headers:
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticate"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Invalid email or password
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Uwierzytelnianie nie jest skonfigurowane.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Authentication is not configured
+
+  /v1/auth/register:
+    post:
+      tags: [Uwierzytelnianie]
+      operationId: register
+      summary: Utwórz konto użytkownika
+      description: Tworzy konto lokalne i zwraca token oraz profil. Hasło ma 12–1024 znaki; nowe konto otrzymuje rolę `user`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              email: ada@example.com
+              password: a-long-unique-password
+              given_name: Ada
+              family_name: Lovelace
+      responses:
+        "201":
+          description: Konto utworzone i użytkownik zalogowany.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationResponse"
+              example:
+                access_token: eyJhbGciOiJIUzI1NiJ9.example.signature
+                token_type: bearer
+                expires_in: 900
+                user:
+                  id: 42
+                  email: ada@example.com
+                  given_name: Ada
+                  family_name: Lovelace
+        "409":
+          description: Konto z tym adresem e-mail już istnieje.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/auth/oauth/{provider}:
+    post:
+      tags: [Uwierzytelnianie]
+      operationId: loginWithOAuth
+      summary: Zaloguj przez Google lub Facebook
+      description: Przyjmuje token ID Google lub token dostępu Facebooka w `credential`. Nowe konto jest tworzone automatycznie; istniejące konto nie jest łączone.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          description: Dostawca tożsamości.
+          schema:
+            type: string
+            enum: [google, facebook]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthLoginRequest"
+            examples:
+              google:
+                summary: Token ID Google
+                value:
+                  credential: google-id-token-from-mobile-sdk
+              facebook:
+                summary: Token dostępu Facebook
+                value:
+                  credential: facebook-access-token-from-mobile-sdk
+      responses:
+        "200":
+          description: Użytkownik zalogowany lub konto utworzone.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationResponse"
+              example:
+                access_token: eyJhbGciOiJIUzI1NiJ9.example.signature
+                token_type: bearer
+                expires_in: 900
+                user:
+                  id: 42
+                  email: ada@example.com
+                  given_name: Ada
+                  family_name: Lovelace
+        "401":
+          description: Token dostawcy jest nieprawidłowy lub konto nieaktywne.
+          headers:
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticate"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Istnieje konto z tym adresem, zaloguj się dotychczasową metodą.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Dostawca OAuth lub konfiguracja OAuth są niedostępne.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/safe-places/nearby:
+    get:
+      tags: [Bezpieczne miejsca]
+      operationId: listNearbySafePlaces
+      summary: Wyszukaj bezpieczne miejsca w pobliżu
+      description: Publiczne wyszukiwanie miejsc w promieniu; wyniki są sortowane od najbliższego. `lat` i `lon` oznaczają współrzędne WGS84.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: Szerokość geograficzna środka wyszukiwania w stopniach WGS84.
+          schema:
+            $ref: "#/components/schemas/Latitude"
+          example: 50.06143
+        - name: lon
+          in: query
+          required: true
+          description: Długość geograficzna środka wyszukiwania w stopniach WGS84.
+          schema:
+            $ref: "#/components/schemas/Longitude"
+          example: 19.93658
+        - name: radius_m
+          in: query
+          required: false
+          description: Promień w metrach; większy od 0, maksymalnie 50 000.
+          schema:
+            type: number
+            exclusiveMinimum: 0
+            maximum: 50000
+            default: 1000
+          example: 1500
+      responses:
+        "200":
+          description: Lista miejsc w promieniu, od najbliższego; może być pusta.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NearbySafePlace"
+              example:
+                - id: 17
+                  category: police
+                  name: Komisariat Policji
+                  opening_hours_raw: 24/7
+                  is_24_7: true
+                  latitude: 50.062
+                  longitude: 19.937
+                  distance_m: 82.4
+                - id: 28
+                  category: hospital
+                  name: Szpital
+                  opening_hours_raw: null
+                  is_24_7: false
+                  latitude: 50.065
+                  longitude: 19.941
+                  distance_m: 510.7
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          description: Nie udało się pobrać miejsc z bazy danych.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Unable to retrieve safe places
+
+  /v1/safe-places/{safe_place_id}:
+    get:
+      tags: [Bezpieczne miejsca]
+      operationId: getSafePlace
+      summary: Pobierz bezpieczne miejsce
+      description: Publicznie zwraca miejsce i współrzędne WGS84. Odległość zwraca endpoint `/nearby`.
+      parameters:
+        - name: safe_place_id
+          in: path
+          required: true
+          description: Numeryczny identyfikator bezpiecznego miejsca.
+          schema:
+            type: integer
+            format: int64
+          example: 17
+      responses:
+        "200":
+          description: Szczegóły wskazanego miejsca.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafePlace"
+              example:
+                id: 17
+                category: police
+                name: Komisariat Policji
+                opening_hours_raw: 24/7
+                is_24_7: true
+                latitude: 50.062
+                longitude: 19.937
+        "404":
+          description: Miejsce o podanym identyfikatorze nie istnieje.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Safe place not found
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          description: Nie udało się pobrać miejsca z bazy danych.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Unable to retrieve safe place
+
+  /v1/route:
+    post:
+      tags: [Trasy]
+      operationId: createRoute
+      summary: Wyznacz pieszą trasę i porównaj jej warianty
+      description: Zwraca najszybszy, najbezpieczniejszy i pozostałe warianty. `safety_weight` 0 preferuje czas, a 1 bezpieczeństwo. Endpoint jest publiczny; tras nie zapisuje.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteRequest"
+            example:
+              start:
+                lat: 50.0687
+                lon: 19.945
+              end:
+                lat: 50.06143
+                lon: 19.93658
+              departure_time: "2026-10-04T18:30:00+02:00"
+              safety_weight: 0.7
+              profile: walking
+      responses:
+        "200":
+          description: Wyznaczone warianty trasy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteResponse"
+        "400":
+          description: Nieprawidłowe współrzędne lub żądanie nie może zostać obsłużone.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: "latitude must be between -90 and 90"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Zewnętrzny dostawca tras lub usługa planowania jest niedostępna.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Route planning is temporarily unavailable
+
+  /v1/location-shares:
+    post:
+      tags: [Udostępnianie lokalizacji]
+      operationId: createLocationShare
+      summary: Rozpocznij tymczasowe udostępnianie lokalizacji
+      description: Tworzy jedno aktywne udostępnienie dla zalogowanego użytkownika i zwraca czterocyfrowy kod.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationShareCreate"
+            example:
+              lat: 50.06143
+              lon: 19.93658
+              duration_seconds: 1800
+      responses:
+        "201":
+          description: Udostępnienie utworzone.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationShare"
+              example:
+                code: "0427"
+                lat: 50.06143
+                lon: 19.93658
+                created_at: "2026-10-04T18:30:00+02:00"
+                updated_at: "2026-10-04T18:30:00+02:00"
+                expires_at: "2026-10-04T19:00:00+02:00"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Użytkownik ma już aktywne udostępnienie lokalizacji.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: An active location share already exists
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Brak wolnego kodu albo konfiguracja uwierzytelniania jest niedostępna.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                codesUnavailable:
+                  summary: Wszystkie kody są aktualnie zajęte
+                  value:
+                    detail: No location-sharing codes are currently available
+                authUnavailable:
+                  summary: Uwierzytelnianie nie jest skonfigurowane
+                  value:
+                    detail: Authentication is not configured
+
+  /v1/location-shares/current:
+    get:
+      tags: [Udostępnianie lokalizacji]
+      operationId: getCurrentLocationShare
+      summary: Pobierz własne aktywne udostępnienie
+      description: Zwraca aktywne udostępnienie zalogowanego użytkownika.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Aktywne udostępnienie zalogowanego użytkownika.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationShare"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ActiveLocationShareNotFound"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+    delete:
+      tags: [Udostępnianie lokalizacji]
+      operationId: revokeCurrentLocationShare
+      summary: Natychmiast unieważnij własne udostępnienie
+      description: Natychmiast unieważnia aktywne udostępnienie; rekord historyczny pozostaje.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Udostępnienie unieważnione; odpowiedź nie zawiera treści.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ActiveLocationShareNotFound"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/location-shares/current/location:
+    put:
+      tags: [Udostępnianie lokalizacji]
+      operationId: updateCurrentLocation
+      summary: Zaktualizuj pozycję własnego udostępnienia
+      description: Aktualizuje współrzędne bez zmiany kodu ani czasu wygaśnięcia.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationUpdate"
+            example:
+              lat: 50.062
+              lon: 19.937
+      responses:
+        "200":
+          description: Udostępnienie zaktualizowane; odpowiedź zawiera bieżący kod i wygaśnięcie.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationShare"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ActiveLocationShareNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/location-shares/{code}:
+    get:
+      tags: [Udostępnianie lokalizacji]
+      operationId: readSharedLocation
+      summary: Odczytaj lokalizację udostępnioną kodem
+      description: Zwraca lokalizację udostępnienia innego użytkownika. Kod daje wyłącznie dostęp do odczytu; niedostępne kody zwracają `404`.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: Czterocyfrowy kod dostępu, z zachowaniem początkowych zer.
+          schema:
+            type: string
+            pattern: "^\\d{4}$"
+          example: "0427"
+      responses:
+        "200":
+          description: Bieżąca pozycja dostępna przez kod.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SharedLocation"
+              example:
+                code: "0427"
+                owner_user_id: 42
+                lat: 50.062
+                lon: 19.937
+                updated_at: "2026-10-04T18:35:00+02:00"
+                expires_at: "2026-10-04T19:00:00+02:00"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ActiveLocationShareNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/reports/nearby:
+    get:
+      tags: [Zgłoszenia]
+      operationId: listNearbyReports
+      summary: Pobierz zgłoszenia z okolicy
+      description: Zwraca aktywne, niewygasłe zgłoszenia w promieniu, posortowane od najbliższego.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: Szerokość geograficzna środka wyszukiwania.
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+          example: 52.23
+        - name: lon
+          in: query
+          required: true
+          description: Długość geograficzna środka wyszukiwania.
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+          example: 21.01
+        - name: radius_m
+          in: query
+          required: false
+          description: Promień wyszukiwania w metrach (maksymalnie 50 000).
+          schema:
+            type: number
+            exclusiveMinimum: 0
+            maximum: 50000
+            default: 1000
+      responses:
+        "200":
+          description: Zgłoszenia w okolicy, od najbliższego.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/reports:
+    get:
+      tags: [Zgłoszenia]
+      operationId: listMyReports
+      summary: Pobierz swoje zgłoszenia
+      description: Zwraca zgłoszenia zalogowanego użytkownika.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Zgłoszenia zalogowanego użytkownika.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+    post:
+      tags: [Zgłoszenia]
+      operationId: createReport
+      summary: Utwórz zgłoszenie
+      description: Tworzy zgłoszenie dla zalogowanego użytkownika; status i liczniki nadaje serwer.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportCreate"
+            example:
+              category: danger
+              lat: 52.23
+              lon: 21.01
+      responses:
+        "201":
+          description: Zgłoszenie utworzone.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/reports/{report_id}:
+    parameters:
+      - name: report_id
+        in: path
+        required: true
+        description: Identyfikator zgłoszenia.
+        schema:
+          type: integer
+          format: int64
+
+    patch:
+      tags: [Zgłoszenia]
+      operationId: updateReport
+      summary: Edytuj swoje zgłoszenie
+      description: Aktualizuje kategorię i/lub lokalizację własnego zgłoszenia. `lat` i `lon` należy podać razem.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportUpdate"
+            examples:
+              category:
+                summary: Zmiana kategorii
+                value:
+                  category: poor_lighting
+              location:
+                summary: Zmiana lokalizacji
+                value:
+                  lat: 52.23
+                  lon: 21.01
+              categoryAndLocation:
+                summary: Zmiana kategorii i lokalizacji
+                value:
+                  category: danger
+                  lat: 52.23
+                  lon: 21.01
+      responses:
+        "200":
+          description: Zgłoszenie zaktualizowane.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ReportNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+    delete:
+      tags: [Zgłoszenia]
+      operationId: deleteReport
+      summary: Usuń swoje zgłoszenie
+      description: Usuwa własne zgłoszenie.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Zgłoszenie usunięte; odpowiedź nie zawiera treści.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ReportNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/reports/{report_id}/confirm:
+    post:
+      tags: [Zgłoszenia]
+      operationId: confirmReport
+      summary: Potwierdź zgłoszenie
+      description: Potwierdza aktywne zgłoszenie innego użytkownika. Powtórne potwierdzenie nie zwiększa licznika.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          description: Identyfikator zgłoszenia.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Potwierdzone zgłoszenie z aktualną liczbą potwierdzeń.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Zgłoszenie nie istnieje, nie jest aktywne albo jest własnym zgłoszeniem.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Report not found or cannot be confirmed
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  headers:
+    WWWAuthenticate:
+      description: Wymagany typ uwierzytelniania.
+      schema:
+        type: string
+      example: Bearer
+
+  responses:
+    Unauthorized:
+      description: Brak tokenu, nieprawidłowy token, token wygasł lub konto jest nieaktywne.
+      headers:
+        WWW-Authenticate:
+          $ref: "#/components/headers/WWWAuthenticate"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Invalid or expired access token
+
+    AuthNotConfigured:
+      description: Uwierzytelnianie nie jest skonfigurowane.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Authentication is not configured
+
+    AdminRequired:
+      description: Konto nie ma roli administratora.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Administrator role required
+
+    UserNotFound:
+      description: Konto nie istnieje.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: User not found
+
+    LastAdminConflict:
+      description: Operacja zablokowana, ponieważ konto jest ostatnim aktywnym administratorem albo administrator próbuje usunąć własne konto.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    ReportNotFound:
+      description: Zgłoszenie nie istnieje lub nie należy do zalogowanego użytkownika.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Report not found
+
+    ActiveLocationShareNotFound:
+      description: Brak aktywnego udostępnienia lub kod nie daje dostępu do tego udostępnienia.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Active location share not found
+
+    ValidationError:
+      description: Żądanie nie przeszło walidacji.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPValidationError"
+
+  schemas:
+    AdminUser:
+      type: object
+      required: [id, email, given_name, family_name, is_active, role, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        given_name:
+          type: [string, "null"]
+        family_name:
+          type: [string, "null"]
+        is_active:
+          type: boolean
+        role:
+          type: string
+          enum: [user, admin]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AdminUserUpdate:
+      type: object
+      minProperties: 1
+      description: Requires at least one field; `null` clears the given or family name.
+      properties:
+        role:
+          type: string
+          enum: [user, admin]
+        is_active:
+          type: boolean
+        given_name:
+          type: [string, "null"]
+          maxLength: 100
+        family_name:
+          type: [string, "null"]
+          maxLength: 100
+    HealthResponse:
+      type: object
+      required: [status, version, commit, mode]
+      properties:
+        status:
+          type: string
+          const: ok
+        version:
+          type: string
+          example: 0.1.0
+        commit:
+          type: string
+          description: Krótki hash commita albo `development`.
+        mode:
+          type: string
+          enum: [mock, live]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+          example: user@example.com
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          format: password
+          writeOnly: true
+          example: correct-horse-battery-staple
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: ada@example.com
+        password:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          format: password
+          writeOnly: true
+          example: a-long-unique-password
+        given_name:
+          type: [string, "null"]
+          maxLength: 100
+        family_name:
+          type: [string, "null"]
+          maxLength: 100
+
+    OAuthLoginRequest:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          writeOnly: true
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: Short-lived JWT for authorizing API requests.
+        token_type:
+          type: string
+          const: bearer
+        expires_in:
+          type: integer
+          description: Czas ważności tokenu w sekundach.
+          minimum: 1
+          example: 900
+
+    AuthenticatedUser:
+      type: object
+      required: [id, email, given_name, family_name]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        given_name:
+          type: [string, "null"]
+        family_name:
+          type: [string, "null"]
+
+    RegistrationResponse:
+      type: object
+      required: [access_token, token_type, expires_in, user]
+      properties:
+        access_token:
+          type: string
+          description: Krótkotrwały JWT dostępowy.
+        token_type:
+          type: string
+          const: bearer
+        expires_in:
+          type: integer
+          minimum: 1
+        user:
+          $ref: "#/components/schemas/AuthenticatedUser"
+
+    ReportCategory:
+      type: string
+      enum:
+        - danger
+        - harassment
+        - poor_lighting
+        - blocked_path
+        - suspicious_activity
+        - other
+
+    ReportStatus:
+      type: string
+      enum: [active, resolved, expired, rejected]
+
+    SafePlaceCategory:
+      type: string
+      description: "Safe-place category: police, hospital, fire station, pharmacy, fuel station, shop, public transport, or other."
+      enum:
+        - police
+        - hospital
+        - fire_station
+        - pharmacy
+        - fuel_station
+        - shop
+        - public_transport
+        - other
+
+    SafePlace:
+      type: object
+      description: Publiczne dane bezpiecznego miejsca wraz z lokalizacją WGS84.
+      required:
+        - id
+        - category
+        - name
+        - opening_hours_raw
+        - is_24_7
+        - latitude
+        - longitude
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unikalny identyfikator miejsca.
+        category:
+          $ref: "#/components/schemas/SafePlaceCategory"
+        name:
+          type: string
+          description: Nazwa miejsca.
+        opening_hours_raw:
+          type: [string, "null"]
+          description: Surowy tekst godzin otwarcia albo `null`; API go nie interpretuje.
+        is_24_7:
+          type: boolean
+          description: Czy miejsce jest oznaczone jako czynne całodobowo.
+        latitude:
+          allOf:
+            - $ref: "#/components/schemas/Latitude"
+          description: Szerokość geograficzna punktu w stopniach WGS84.
+        longitude:
+          allOf:
+            - $ref: "#/components/schemas/Longitude"
+          description: Długość geograficzna punktu w stopniach WGS84.
+
+    LocationShareCreate:
+      type: object
+      description: Początkowa pozycja oraz okres ważności nowego udostępnienia.
+      required: [lat, lon, duration_seconds]
+      properties:
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+        duration_seconds:
+          type: integer
+          minimum: 1
+          maximum: 86400
+          description: Czas ważności w sekundach, od 1 sekundy do 24 godzin.
+          example: 1800
+
+    LocationUpdate:
+      type: object
+      description: Nowa pozycja dla aktywnego udostępnienia właściciela.
+      required: [lat, lon]
+      properties:
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+
+    LocationShare:
+      type: object
+      description: Udostępnienie i jego bieżąca lokalizacja widoczne dla właściciela.
+      required: [code, lat, lon, created_at, updated_at, expires_at]
+      properties:
+        code:
+          type: string
+          pattern: "^\\d{4}$"
+          description: Czterocyfrowy kod dostępu; początkowe zero jest znaczące.
+          example: "0427"
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+        created_at:
+          type: string
+          format: date-time
+          description: Czas utworzenia udostępnienia w formacie RFC 3339.
+        updated_at:
+          type: string
+          format: date-time
+          description: Czas ostatniej aktualizacji lokalizacji.
+        expires_at:
+          type: string
+          format: date-time
+          description: Czas automatycznego wygaśnięcia udostępnienia.
+
+    SharedLocation:
+      type: object
+      description: Ograniczony do odczytu podgląd lokalizacji udostępnionej innemu użytkownikowi.
+      required: [code, owner_user_id, lat, lon, updated_at, expires_at]
+      properties:
+        code:
+          type: string
+          pattern: "^\\d{4}$"
+          description: Czterocyfrowy kod udostępnienia.
+          example: "0427"
+        owner_user_id:
+          type: integer
+          format: int64
+          description: Identyfikator użytkownika będącego właścicielem udostępnienia.
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+        updated_at:
+          type: string
+          format: date-time
+          description: Czas ostatniej aktualizacji lokalizacji.
+        expires_at:
+          type: string
+          format: date-time
+          description: Czas automatycznego wygaśnięcia udostępnienia.
+
+    Coordinate:
+      type: object
+      description: Punkt w formacie szerokość geograficzna `lat`, długość `lon`.
+      required: [lat, lon]
+      properties:
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+
+    RouteRequest:
+      type: object
+      description: Parametry wyznaczania pieszej trasy.
+      required: [start, end, departure_time, safety_weight]
+      properties:
+        start:
+          allOf:
+            - $ref: "#/components/schemas/Coordinate"
+          description: Punkt początkowy trasy.
+        end:
+          allOf:
+            - $ref: "#/components/schemas/Coordinate"
+          description: Punkt docelowy trasy.
+        departure_time:
+          type: string
+          format: date-time
+          description: Czas w formacie RFC 3339; zalecany offset strefy czasowej.
+          example: "2026-10-04T18:30:00+02:00"
+        safety_weight:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: "Safety weight: 0 prefers time; 1 prefers safety."
+        profile:
+          type: string
+          enum: [walking]
+          default: walking
+          description: Profil podróży; obecnie obsługiwany jest wyłącznie ruch pieszy.
+
+    GeoJSONLineString:
+      type: object
+      description: GeoJSON LineString; każda para współrzędnych jest zapisana jako [longitude, latitude].
+      required: [type, coordinates]
+      properties:
+        type:
+          type: string
+          const: LineString
+        coordinates:
+          type: array
+          minItems: 2
+          items:
+            type: array
+            prefixItems:
+              - $ref: "#/components/schemas/Longitude"
+              - $ref: "#/components/schemas/Latitude"
+            minItems: 2
+            maxItems: 2
+
+    RouteSegment:
+      type: object
+      description: Fragment trasy wraz z poziomem ryzyka w skali 0–100.
+      required: [geometry, risk_level]
+      properties:
+        geometry:
+          $ref: "#/components/schemas/GeoJSONLineString"
+        risk_level:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Wartość 0 oznacza niższe, a 100 wyższe ryzyko.
+
+    RouteComponents:
+      type: object
+      description: Dostępne metryki użyte do oceny bezpieczeństwa wariantu.
+      required: [reports_nearby, tunnel_m, safe_places_nearby]
+      properties:
+        lit_ratio:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+          description: Udział segmentów oświetlonych; null oznacza brak danych.
+        reports_nearby:
+          type: integer
+          minimum: 0
+          description: Liczba aktywnych zgłoszeń uwzględnionych w pobliżu trasy.
+        reports_impact:
+          type: number
+          minimum: 0
+          description: Znormalizowany wpływ zgłoszeń na wynik.
+        crime_exposure:
+          type: [number, "null"]
+          minimum: 0
+          description: Ekspozycja na historyczne zdarzenia; null oznacza brak danych.
+        tunnel_m:
+          type: number
+          minimum: 0
+          description: Łączna długość odcinków tunelowych w metrach.
+        safe_places_nearby:
+          type: integer
+          minimum: 0
+          description: Liczba bezpiecznych miejsc w pobliżu rozpatrywanego wariantu.
+        cameras_nearby:
+          type: integer
+          minimum: 0
+          description: Liczba kamer w pobliżu trasy, jeśli dostępne.
+        surface_score:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+          description: Ocena nawierzchni; null oznacza brak danych.
+        incline_score:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+          description: Ocena nachylenia; null oznacza brak danych.
+        crossing_score:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+          description: Ocena przejść i skrzyżowań; null oznacza brak danych.
+        road_type_score:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+          description: Ocena typu drogi; null oznacza brak danych.
+        stairs_score:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+          description: Ocena odcinków ze schodami; null oznacza brak danych.
+        access_score:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+          description: Ocena dostępności; null oznacza brak danych.
+
+    RouteOption:
+      type: object
+      description: Jeden kompletny wariant trasy.
+      required: [geometry, duration_s, distance_m, safety_score, components, segments, explanation]
+      properties:
+        geometry:
+          $ref: "#/components/schemas/GeoJSONLineString"
+        duration_s:
+          type: number
+          minimum: 0
+          description: Szacowany czas przejścia w sekundach.
+        distance_m:
+          type: number
+          minimum: 0
+          description: Długość trasy w metrach.
+        safety_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Wynik bezpieczeństwa w skali od 0 do 100.
+        components:
+          $ref: "#/components/schemas/RouteComponents"
+        segments:
+          type: array
+          description: Segmenty trasy z geometrią i oszacowanym ryzykiem.
+          items:
+            $ref: "#/components/schemas/RouteSegment"
+        explanation:
+          type: string
+          description: Krótkie tekstowe uzasadnienie oceny wariantu.
+
+    RouteMeta:
+      type: object
+      required: [mode, version, data_coverage]
+      properties:
+        mode:
+          type: string
+          enum: [mock, live]
+          description: Tryb pracy API.
+        version:
+          type: string
+          description: Wersja logiki wyznaczania trasy.
+        data_coverage:
+          type: string
+          enum: [segment_data, mapbox_only]
+          description: "`segment_data` means local road-segment data is available; `mapbox_only` means it is not."
+        route_source:
+          type: [string, "null"]
+          description: Opcjonalna informacja o źródle wybranego wariantu.
+
+    RouteResponse:
+      type: object
+      required: [fastest, safest, meta]
+      properties:
+        fastest:
+          allOf:
+            - $ref: "#/components/schemas/RouteOption"
+          description: Wariant o najkrótszym szacowanym czasie przejścia.
+        safest:
+          allOf:
+            - $ref: "#/components/schemas/RouteOption"
+          description: Wariant o najwyższej ocenie bezpieczeństwa.
+        alternatives:
+          type: array
+          description: Pozostałe unikalne warianty, bez powtarzania fastest i safest.
+          items:
+            $ref: "#/components/schemas/RouteOption"
+        meta:
+          $ref: "#/components/schemas/RouteMeta"
+
+    NearbySafePlace:
+      allOf:
+        - $ref: "#/components/schemas/SafePlace"
+        - type: object
+          required: [distance_m]
+          properties:
+            distance_m:
+              type: number
+              minimum: 0
+              description: Odległość od punktu wyszukiwania, w metrach.
+
+    Latitude:
+      type: number
+      minimum: -90
+      maximum: 90
+
+    Longitude:
+      type: number
+      minimum: -180
+      maximum: 180
+
+    ReportCreate:
+      type: object
+      required: [category, lat, lon]
+      properties:
+        category:
+          $ref: "#/components/schemas/ReportCategory"
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+
+    ReportUpdate:
+      type: object
+      description: Requires a category or both `lat` and `lon`.
+      anyOf:
+        - required: [category]
+        - required: [lat, lon]
+      properties:
+        category:
+          allOf:
+            - $ref: "#/components/schemas/ReportCategory"
+        lat:
+          allOf:
+            - $ref: "#/components/schemas/Latitude"
+          description: Musi wystąpić razem z `lon`.
+        lon:
+          allOf:
+            - $ref: "#/components/schemas/Longitude"
+          description: Musi wystąpić razem z `lat`.
+      allOf:
+        - if:
+            required: [lat]
+          then:
+            required: [lon]
+        - if:
+            required: [lon]
+          then:
+            required: [lat]
+
+    Report:
+      type: object
+      required:
+        - id
+        - category
+        - lat
+        - lon
+        - created_at
+        - expires_at
+        - status
+        - confirmations
+      properties:
+        id:
+          type: integer
+          format: int64
+        category:
+          $ref: "#/components/schemas/ReportCategory"
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: [string, "null"]
+          format: date-time
+        status:
+          $ref: "#/components/schemas/ReportStatus"
+        confirmations:
+          type: integer
+          minimum: 0
+
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+
+    HTTPValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationError"
+
+    ValidationError:
+      type: object
+      required: [loc, msg, type]
+      properties:
+        loc:
+          type: array
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+        type:
+          type: string
+        input: {}
+        ctx:
+          type: object
+          additionalProperties: true

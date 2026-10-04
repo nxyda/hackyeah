@@ -1,0 +1,7 @@
+# Copy these entries into local.properties; keep the existing sdk.dir line.
+# Create a public Mapbox token with the scopes needed by the Android app.
+MAPBOX_ACCESS_TOKEN=pk.replace_with_your_public_token
+# Secret Mapbox downloads:read token; used only by Gradle to download SDKs.
+MAPBOX_DOWNLOADS_TOKEN=sk.replace_with_your_downloads_token
+# Android emulator address for the backend running on this computer.
+API_BASE_URL=http://10.0.2.2:8000/

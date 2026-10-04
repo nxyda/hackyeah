@@ -1,0 +1,131 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="card mb-3">
+        <div class="card-header">
+          <h3 class="card-title">Wyznacz trasę pieszą</h3>
+        </div>
+        <div class="card-body">
+          <p class="text-muted">
+            Podgląd korzysta z tych samych danych i scoringu co API. Trasa nie jest
+            zapisywana; do wyznaczenia potrzebny jest skonfigurowany dostawca tras.
+          </p>
+          {% if error %}
+          <div class="alert alert-danger" role="alert">{{ error }}</div>
+          {% endif %}
+          <form action="{{ url_for('admin:routes') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="row">
+              <div class="col-md-3 mb-3">
+                <label class="form-label" for="start_lat">Początek — szerokość</label>
+                <input class="form-control" id="start_lat" name="start_lat" type="number"
+                       step="any" min="-90" max="90" required value="{{ values.start_lat }}">
+              </div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label" for="start_lon">Początek — długość</label>
+                <input class="form-control" id="start_lon" name="start_lon" type="number"
+                       step="any" min="-180" max="180" required value="{{ values.start_lon }}">
+              </div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label" for="end_lat">Cel — szerokość</label>
+                <input class="form-control" id="end_lat" name="end_lat" type="number"
+                       step="any" min="-90" max="90" required value="{{ values.end_lat }}">
+              </div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label" for="end_lon">Cel — długość</label>
+                <input class="form-control" id="end_lon" name="end_lon" type="number"
+                       step="any" min="-180" max="180" required value="{{ values.end_lon }}">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label" for="departure_time">Czas wyjścia (ISO 8601 z offsetem)</label>
+                <input class="form-control" id="departure_time" name="departure_time" type="text"
+                       placeholder="2026-10-04T18:30+02:00" required value="{{ values.departure_time }}">
+              </div>
+              <div class="col-md-3 mb-3">
+                <label class="form-label" for="safety_weight">Waga bezpieczeństwa (0–1)</label>
+                <input class="form-control" id="safety_weight" name="safety_weight" type="number"
+                       step="any" min="0" max="1" required value="{{ values.safety_weight }}">
+              </div>
+              <div class="col-md-3 mb-3 d-flex align-items-end">
+                <button class="btn btn-primary" type="submit">Wyznacz i oceń trasę</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% if result %}
+      <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Warianty trasy</h3></div>
+        <div class="table-responsive">
+          <table class="table table-vcenter table-hover mb-0">
+            <thead>
+              <tr><th>Wariant</th><th>Długość</th><th>Czas</th><th>Ocena bezpieczeństwa</th><th>Dane</th></tr>
+            </thead>
+            <tbody>
+              {% for label, route in [("Najszybsza", result.fastest), ("Najbezpieczniejsza", result.safest)] %}
+              <tr>
+                <td>{{ label }}</td>
+                <td>{{ "%.0f"|format(route.distance_m) }} m</td>
+                <td>{{ "%.0f"|format(route.duration_s / 60) }} min</td>
+                <td>{{ "%.1f"|format(route.safety_score) }}/100</td>
+                <td>{{ route.explanation }}</td>
+              </tr>
+              {% endfor %}
+              {% for route in result.alternatives %}
+              <tr>
+                <td>Alternatywa {{ loop.index }}</td>
+                <td>{{ "%.0f"|format(route.distance_m) }} m</td>
+                <td>{{ "%.0f"|format(route.duration_s / 60) }} min</td>
+                <td>{{ "%.1f"|format(route.safety_score) }}/100</td>
+                <td>{{ route.explanation }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-body">
+          <div id="route-map" style="height: 480px; border-radius: 8px;"
+               data-route-result="{{ result | tojson | forceescape }}"></div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% if result %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(() => {
+  const element = document.getElementById("route-map");
+  if (!element || !window.L) return;
+  const result = JSON.parse(element.dataset.routeResult || "{}");
+  const map = L.map(element);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+  const routes = [
+    {label: "Najszybsza", route: result.fastest, color: "#2563eb"},
+    {label: "Najbezpieczniejsza", route: result.safest, color: "#16a34a"},
+    ...(result.alternatives || []).map((route, index) => ({
+      label: `Alternatywa ${index + 1}`, route, color: "#64748b"
+    }))
+  ];
+  const bounds = [];
+  routes.forEach(({label, route, color}) => {
+    const coordinates = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+    const line = L.polyline(coordinates, {color, weight: 5}).addTo(map);
+    line.bindPopup(`${label}: ${route.safety_score.toFixed(1)}/100`);
+    bounds.push(...coordinates);
+  });
+  if (bounds.length) map.fitBounds(L.latLngBounds(bounds).pad(0.15));
+  window.setTimeout(() => map.invalidateSize(), 100);
+})();
+</script>
+{% endif %}
+{% endblock %}

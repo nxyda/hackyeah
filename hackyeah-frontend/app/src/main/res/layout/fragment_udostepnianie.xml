@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:padding="16dp"
+    android:paddingTop="32dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <ImageView
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:src="@android:drawable/ic_menu_share"
+            android:layout_marginBottom="16dp"
+            android:layout_marginTop="16dp"
+            app:tint="#FF028D"
+            xmlns:app="http://schemas.android.com/apk/res-auto"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Śledzenie na żywo"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="24dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_rounded_panel"
+            android:backgroundTint="#1A1A1A"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:layout_marginBottom="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="UDOSTĘPNIJ SWOJĄ TRASĘ"
+                android:textColor="#888888"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:id="@+id/tv_broadcast_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔴 Nie nadajesz sygnału"
+                android:textColor="#F44336"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:id="@+id/tv_share_code"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="TWÓJ KOD: ----"
+                android:textAlignment="center"
+                android:textColor="#4CAF50"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.2"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone"/>
+
+            <Button
+                android:id="@+id/btn_start_broadcast"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:text="Generuj kod i rozpocznij"
+                android:backgroundTint="#4E1C51"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"/>
+
+            <Button
+                android:id="@+id/btn_stop_broadcast"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:text="Zakończ udostępnianie"
+                android:backgroundTint="#333333"
+                android:textColor="#FF5252"
+                android:layout_marginTop="8dp"
+                android:visibility="gone"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_rounded_panel"
+            android:backgroundTint="#1A1A1A"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:layout_marginBottom="32dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ŚLEDŹ BLISKĄ OSOBĘ"
+                android:textColor="#888888"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp"/>
+
+            <EditText
+                android:id="@+id/et_receive_code"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:hint="Wpisz 4-cyfrowy kod z SMS"
+                android:inputType="number"
+                android:maxLength="4"
+                android:textAlignment="center"
+                android:textSize="20sp"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#666666"
+                android:backgroundTint="#444444"
+                android:layout_marginBottom="16dp"/>
+
+            <Button
+                android:id="@+id/btn_start_tracking"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:text="Połącz i śledź"
+                android:backgroundTint="#4E1C51"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"/>
+
+            <Button
+                android:id="@+id/btn_stop_tracking"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:text="Zakończ śledzenie"
+                android:backgroundTint="#333333"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="8dp"
+                android:visibility="gone"/>
+
+            <LinearLayout
+                android:id="@+id/panel_live_data"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="16dp"
+                android:padding="12dp"
+                android:background="#121212"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tv_live_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Status: Oczekiwanie na sygnał..."
+                    android:textColor="#2196F3"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="12dp"/>
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="400dp"
+                    android:background="#222222">
+
+                    <com.mapbox.maps.MapView
+                        android:id="@+id/mapView_receiver"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+
+                </FrameLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

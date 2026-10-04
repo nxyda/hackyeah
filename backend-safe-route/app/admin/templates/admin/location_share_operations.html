@@ -1,0 +1,63 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Aktywne udostępnienia lokalizacji</h3>
+          <div class="ms-auto">
+            <a class="btn btn-secondary" href="{{ url_for('admin:list', identity='location-share') }}">
+              Historia udostępnień
+            </a>
+          </div>
+        </div>
+        <div class="card-body">
+          {% if result == "revoked" %}
+          <div class="alert alert-success" role="status">Udostępnienie zostało unieważnione.</div>
+          {% endif %}
+          <p class="text-muted">
+            Kody dają dostęp do bieżącej lokalizacji. Traktuj je jako dane wrażliwe;
+            unieważnienie natychmiast odbiera dostęp i zwalnia kod.
+          </p>
+          <div class="table-responsive">
+            <table class="table table-vcenter table-hover">
+              <thead>
+                <tr>
+                  <th>Użytkownik</th>
+                  <th>Kod</th>
+                  <th>Lokalizacja (szer., dł.)</th>
+                  <th>Ostatnia aktualizacja</th>
+                  <th>Wygasa</th>
+                  <th>Operacja</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for share in shares %}
+                <tr>
+                  <td>{{ share.owner_email }}</td>
+                  <td><code>{{ share.code }}</code></td>
+                  <td>{{ "%.5f"|format(share.latitude) }}, {{ "%.5f"|format(share.longitude) }}</td>
+                  <td>{{ share.updated_at }}</td>
+                  <td>{{ share.expires_at }}</td>
+                  <td>
+                    <form action="{{ url_for('admin:operations') }}" method="POST"
+                          onsubmit="return confirm('Natychmiast unieważnić to udostępnienie?');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                      <input type="hidden" name="share_id" value="{{ share.id }}">
+                      <button class="btn btn-danger btn-sm" type="submit">Unieważnij</button>
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-muted">Brak aktywnych udostępnień lokalizacji.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

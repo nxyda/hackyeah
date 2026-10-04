@@ -1,0 +1,116 @@
+<div class="card my-3 spatial-map-card"
+     data-spatial-map
+     data-field="{{ spatial_field }}"
+     data-geometry-type="{{ model_view.spatial_geometry_type }}">
+  <div class="card-header">
+    <h3 class="card-title mb-0">Lokalizacja na mapie</h3>
+  </div>
+  <div class="card-body">
+    <p class="text-muted">
+      Kliknij mapę, aby ustawić punkt. Możesz też przeciągnąć marker.
+      Dla segmentu drogi klikaj kolejne punkty, aby narysować linię.
+      Współrzędne zapisujemy w standardzie WKT.
+    </p>
+    <div class="spatial-map" style="height: 360px; border-radius: 8px;"></div>
+  </div>
+</div>
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin="">
+<style>
+  .spatial-map-card .leaflet-container { z-index: 1; }
+</style>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+<script>
+(() => {
+  const container = document.querySelector("[data-spatial-map]");
+  if (!container || !window.L) return;
+  const field = document.querySelector(`[name="${container.dataset.field}"]`);
+  const mapElement = container.querySelector(".spatial-map");
+  if (!field || !mapElement) return;
+
+  const geometryType = container.dataset.geometryType;
+  const defaultMapCenter = [50.0647, 19.9450];
+  const map = L.map(mapElement).setView(defaultMapCenter, 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  const coordinatePattern = /(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g;
+  const parseWkt = (value) => {
+    const match = /^\s*(POINT|LINESTRING)\s*\((.*)\)\s*$/i.exec(value || "");
+    if (!match || match[1].toUpperCase() !== geometryType) return [];
+    const coordinates = [...match[2].matchAll(coordinatePattern)].map((item) => [
+      Number(item[2]),
+      Number(item[1])
+    ]);
+    return coordinates.filter(([lat, lon]) =>
+      Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+    );
+  };
+  const writeWkt = () => {
+    if (geometryType === "POINT" && coordinates.length) {
+      field.value = `POINT(${coordinates[0][1]} ${coordinates[0][0]})`;
+    } else if (geometryType === "LINESTRING" && coordinates.length >= 2) {
+      field.value = `LINESTRING(${coordinates.map(([lat, lon]) => `${lon} ${lat}`).join(", ")})`;
+    }
+    field.dispatchEvent(new Event("input", {bubbles: true}));
+    field.dispatchEvent(new Event("change", {bubbles: true}));
+  };
+  let coordinates = parseWkt(field.value);
+  if (geometryType === "POINT" && !field.value.trim()) {
+    coordinates = [defaultMapCenter];
+    writeWkt();
+  }
+  let marker;
+  let line;
+  let vertexMarkers = [];
+  const renderGeometry = () => {
+    if (marker) map.removeLayer(marker);
+    if (line) map.removeLayer(line);
+    vertexMarkers.forEach((vertex) => map.removeLayer(vertex));
+    vertexMarkers = [];
+    if (geometryType === "POINT" && coordinates.length) {
+      marker = L.marker(coordinates[0], {draggable: true}).addTo(map);
+      marker.on("dragend", () => {
+        const position = marker.getLatLng();
+        coordinates = [[position.lat, position.lng]];
+        writeWkt();
+      });
+    } else if (geometryType === "LINESTRING" && coordinates.length) {
+      line = L.polyline(coordinates, {color: "#2563eb", weight: 5}).addTo(map);
+      coordinates.forEach((coordinate, index) => {
+        const vertex = L.marker(coordinate, {draggable: true}).addTo(map);
+        vertex.on("dragend", () => {
+          const position = vertex.getLatLng();
+          coordinates[index] = [position.lat, position.lng];
+          line.setLatLngs(coordinates);
+          writeWkt();
+        });
+        vertexMarkers.push(vertex);
+      });
+    }
+  };
+
+  renderGeometry();
+  if (coordinates.length) {
+    map.fitBounds(L.latLngBounds(coordinates).pad(0.25), {maxZoom: 17});
+  }
+  map.on("click", (event) => {
+    if (geometryType === "POINT") coordinates = [[event.latlng.lat, event.latlng.lng]];
+    else coordinates.push([event.latlng.lat, event.latlng.lng]);
+    renderGeometry();
+    writeWkt();
+  });
+  field.addEventListener("change", () => {
+    coordinates = parseWkt(field.value);
+    renderGeometry();
+    if (coordinates.length) map.fitBounds(L.latLngBounds(coordinates).pad(0.25), {maxZoom: 17});
+  });
+  window.setTimeout(() => map.invalidateSize(), 100);
+})();
+</script>

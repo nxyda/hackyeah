@@ -1,0 +1,46 @@
+version: 1
+
+profiles:
+  walking:
+    day:
+      lighting: 0.00
+      reports: 0.23
+      crime_history: 0.27
+      tunnels: 0.15
+      safe_places: 0.15
+      footway: 0.10
+      surveillance: 0.05
+      road_type: 0.03
+      stairs: 0.02
+      access: 0.00
+      surface: 0.00
+      incline: 0.00
+      crossing: 0.00
+    night:
+      lighting: 0.25
+      reports: 0.17
+      crime_history: 0.20
+      tunnels: 0.15
+      safe_places: 0.08
+      footway: 0.05
+      surveillance: 0.00
+      road_type: 0.03
+      stairs: 0.02
+      access: 0.00
+      surface: 0.02
+      incline: 0.02
+      crossing: 0.01
+
+normalization:
+  reports_saturation_count: 5
+  crime_exposure_saturation: 5.0
+  safe_place_max_distance_m: 500
+  tunnel_penalty_distance_m: 100
+  crime_half_life_days: 180
+  crime_category_weights:
+    assault: 1.0
+    robbery: 1.0
+    harassment: 0.8
+    theft: 0.5
+    vandalism: 0.3
+    other: 0.5

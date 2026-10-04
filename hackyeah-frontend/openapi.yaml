@@ -1,0 +1,904 @@
+openapi: 3.1.0
+
+info:
+  title: Safe Route API
+  version: 0.1.0
+  description: |
+    Kontrakt aktualnie udostępnionych endpointów API.
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Lokalny serwer developerski
+
+tags:
+  - name: Health
+    description: Diagnostyka usługi
+  - name: Auth
+    description: Logowanie i token dostępu
+  - name: Reports
+    description: Zgłoszenia zalogowanego użytkownika
+  - name: Admin
+    description: Zarządzanie kontami dostępne dla administratora
+
+paths:
+  /v1/admin/users:
+    get:
+      tags: [Admin]
+      operationId: adminListUsers
+      summary: Lista użytkowników
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Użytkownicy bez hashy haseł.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/admin/users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        description: Identyfikator konta użytkownika.
+        schema:
+          type: integer
+    patch:
+      tags: [Admin]
+      operationId: adminUpdateUser
+      summary: Zmień rolę lub status użytkownika
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserUpdate"
+            example:
+              role: admin
+              is_active: true
+      responses:
+        "200":
+          description: Zaktualizowane konto.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "409":
+          $ref: "#/components/responses/LastAdminConflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+    delete:
+      tags: [Admin]
+      operationId: adminDeleteUser
+      summary: Usuń konto użytkownika
+      description: Usunięcie konta kaskadowo usuwa jego zgłoszenia i tożsamości.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Konto usunięte.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "409":
+          $ref: "#/components/responses/LastAdminConflict"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/admin/users/{user_id}/password:
+    put:
+      tags: [Admin]
+      operationId: adminSetUserPassword
+      summary: Ustaw hasło użytkownika
+      description: |
+        Ustawia nowe hasło lokalne konta administratora. Hasło musi mieć
+        od 12 do 1024 znaków. Hash hasła nigdy nie jest zwracany.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: Identyfikator konta użytkownika.
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  minLength: 12
+                  maxLength: 1024
+                  format: password
+                  writeOnly: true
+            example:
+              password: new-long-secure-password
+      responses:
+        "204":
+          description: Hasło ustawione.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "#/components/responses/UserNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Sprawdź stan API
+      responses:
+        "200":
+          description: API działa.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                version: 0.1.0
+                commit: a1b2c3d
+                mode: live
+
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Zaloguj użytkownika
+      description: |
+        Wymienia poprawny adres e-mail i hasło na krótkotrwały token dostępu.
+        W kolejnych żądaniach do chronionych endpointów przekazuj token w
+        nagłówku `Authorization: Bearer <access_token>`. Nie wysyłaj do klienta
+        ani nie przechowuj w aplikacji mobilnej sekretnego klucza podpisującego.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: user@example.com
+              password: correct-horse-battery-staple
+      responses:
+        "200":
+          description: Użytkownik zalogowany.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+              example:
+                access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                token_type: bearer
+                expires_in: 900
+        "401":
+          description: Nieprawidłowy adres e-mail lub hasło.
+          headers:
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticate"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Invalid email or password
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Uwierzytelnianie nie jest skonfigurowane.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Authentication is not configured
+
+  /v1/auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Utwórz konto użytkownika
+      description: |
+        Tworzy konto lokalne. Hasło musi mieć co najmniej 12 znaków i jest
+        przechowywane wyłącznie jako hash Argon2. Imię i nazwisko są opcjonalne.
+        Po rejestracji odpowiedź zawiera token dostępu i podstawowy profil.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              email: ada@example.com
+              password: a-long-unique-password
+              given_name: Ada
+              family_name: Lovelace
+      responses:
+        "201":
+          description: Konto utworzone i użytkownik zalogowany.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationResponse"
+        "409":
+          description: Konto z tym adresem e-mail już istnieje.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/auth/oauth/{provider}:
+    post:
+      tags: [Auth]
+      operationId: loginWithOAuth
+      summary: Zaloguj przez Google lub Facebook
+      description: |
+        Aplikacja mobilna uzyskuje poświadczenie przez oficjalny SDK dostawcy
+        i przekazuje je backendowi jako `credential`. Dla `google` musi to być
+        token ID (nie access token); dla `facebook` token dostępu. Backend
+        weryfikuje token i odbiera adres e-mail oraz nazwy bezpośrednio od
+        dostawcy. Nowy adres jest rejestrowany automatycznie. Istniejące konto
+        o tym samym adresie nie jest automatycznie łączone.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          description: Dostawca tożsamości.
+          schema:
+            type: string
+            enum: [google, facebook]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthLoginRequest"
+            examples:
+              google:
+                summary: Token ID Google
+                value:
+                  credential: google-id-token-from-mobile-sdk
+              facebook:
+                summary: Token dostępu Facebook
+                value:
+                  credential: facebook-access-token-from-mobile-sdk
+      responses:
+        "200":
+          description: Użytkownik zalogowany lub konto utworzone.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationResponse"
+        "401":
+          description: Token dostawcy jest nieprawidłowy lub konto nieaktywne.
+          headers:
+            WWW-Authenticate:
+              $ref: "#/components/headers/WWWAuthenticate"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Istnieje konto z tym adresem, zaloguj się dotychczasową metodą.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Dostawca OAuth lub konfiguracja OAuth są niedostępne.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/reports/nearby:
+    get:
+      tags: [Reports]
+      operationId: listNearbyReports
+      summary: Pobierz zgłoszenia z okolicy
+      description: |
+        Zwraca aktywne, niewygasłe zgłoszenia w zadanym promieniu, posortowane
+        od najbliższego. Endpoint wymaga uwierzytelnienia. Maksymalny promień to 50 km.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: Szerokość geograficzna środka wyszukiwania.
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+          example: 52.23
+        - name: lon
+          in: query
+          required: true
+          description: Długość geograficzna środka wyszukiwania.
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+          example: 21.01
+        - name: radius_m
+          in: query
+          required: false
+          description: Promień wyszukiwania w metrach (maksymalnie 50 000).
+          schema:
+            type: number
+            exclusiveMinimum: 0
+            maximum: 50000
+            default: 1000
+      responses:
+        "200":
+          description: Zgłoszenia w okolicy, od najbliższego.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/reports:
+    get:
+      tags: [Reports]
+      operationId: listMyReports
+      summary: Pobierz swoje zgłoszenia
+      description: Zwraca zgłoszenia przypisane do użytkownika z tokenu JWT.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Zgłoszenia zalogowanego użytkownika.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+    post:
+      tags: [Reports]
+      operationId: createReport
+      summary: Utwórz zgłoszenie
+      description: |
+        Tworzy zgłoszenie przypisane do zalogowanego użytkownika. Identyfikator
+        użytkownika, status, czas utworzenia i liczba potwierdzeń są nadawane
+        przez serwer.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportCreate"
+            example:
+              category: danger
+              lat: 52.23
+              lon: 21.01
+      responses:
+        "201":
+          description: Zgłoszenie utworzone.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/reports/{report_id}:
+    parameters:
+      - name: report_id
+        in: path
+        required: true
+        description: Identyfikator zgłoszenia.
+        schema:
+          type: integer
+          format: int64
+
+    patch:
+      tags: [Reports]
+      operationId: updateReport
+      summary: Edytuj swoje zgłoszenie
+      description: |
+        Zmienia kategorię i/lub lokalizację własnego zgłoszenia. Przy zmianie
+        lokalizacji wymagane są jednocześnie `lat` i `lon`. Cudze i nieistniejące
+        zgłoszenia zwracają ten sam kod 404.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportUpdate"
+            examples:
+              category:
+                summary: Zmiana kategorii
+                value:
+                  category: poor_lighting
+              location:
+                summary: Zmiana lokalizacji
+                value:
+                  lat: 52.23
+                  lon: 21.01
+              categoryAndLocation:
+                summary: Zmiana kategorii i lokalizacji
+                value:
+                  category: danger
+                  lat: 52.23
+                  lon: 21.01
+      responses:
+        "200":
+          description: Zgłoszenie zaktualizowane.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ReportNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+    delete:
+      tags: [Reports]
+      operationId: deleteReport
+      summary: Usuń swoje zgłoszenie
+      description: |
+        Usuwa zgłoszenie tylko wtedy, gdy należy do zalogowanego użytkownika.
+        Cudze i nieistniejące zgłoszenia zwracają ten sam kod 404.
+      security:
+        - BearerAuth: []
+      responses:
+        "204":
+          description: Zgłoszenie usunięte; odpowiedź nie zawiera treści.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ReportNotFound"
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+  /v1/reports/{report_id}/confirm:
+    post:
+      tags: [Reports]
+      operationId: confirmReport
+      summary: Potwierdź zgłoszenie
+      description: |
+        Potwierdza cudze aktywne zgłoszenie. Użytkownik może potwierdzić dane
+        zgłoszenie tylko raz; ponowienie żądania jest idempotentne i nie zwiększa
+        licznika ponownie. Własne, nieaktywne i nieistniejące zgłoszenia zwracają 404.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          description: Identyfikator zgłoszenia.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Potwierdzone zgłoszenie z aktualną liczbą potwierdzeń.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Zgłoszenie nie istnieje, nie jest aktywne albo jest własnym zgłoszeniem.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Report not found or cannot be confirmed
+        "503":
+          $ref: "#/components/responses/AuthNotConfigured"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  headers:
+    WWWAuthenticate:
+      description: Wymagany typ uwierzytelniania.
+      schema:
+        type: string
+      example: Bearer
+
+  responses:
+    Unauthorized:
+      description: Brak tokenu, nieprawidłowy token, token wygasł lub konto jest nieaktywne.
+      headers:
+        WWW-Authenticate:
+          $ref: "#/components/headers/WWWAuthenticate"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Invalid or expired access token
+
+    AuthNotConfigured:
+      description: Uwierzytelnianie nie jest skonfigurowane.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Authentication is not configured
+
+    AdminRequired:
+      description: Konto nie ma roli administratora.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Administrator role required
+
+    UserNotFound:
+      description: Konto nie istnieje.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: User not found
+
+    LastAdminConflict:
+      description: Operacja zablokowana, ponieważ konto jest ostatnim aktywnym administratorem.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    ReportNotFound:
+      description: Zgłoszenie nie istnieje lub nie należy do zalogowanego użytkownika.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: Report not found
+
+    ValidationError:
+      description: Żądanie nie przeszło walidacji.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPValidationError"
+
+  schemas:
+    AdminUser:
+      type: object
+      required: [id, email, is_active, role, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        given_name:
+          type: [string, "null"]
+        family_name:
+          type: [string, "null"]
+        is_active:
+          type: boolean
+        role:
+          type: string
+          enum: [user, admin]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AdminUserUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        role:
+          type: string
+          enum: [user, admin]
+        is_active:
+          type: boolean
+        given_name:
+          type: [string, "null"]
+        family_name:
+          type: [string, "null"]
+    HealthResponse:
+      type: object
+      required: [status, version, commit, mode]
+      properties:
+        status:
+          type: string
+          const: ok
+        version:
+          type: string
+          example: 0.1.0
+        commit:
+          type: string
+          description: Krótki hash commita albo `development`.
+        mode:
+          type: string
+          enum: [mock, live]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          format: password
+          writeOnly: true
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          format: password
+          writeOnly: true
+        given_name:
+          type: [string, "null"]
+          maxLength: 100
+        family_name:
+          type: [string, "null"]
+          maxLength: 100
+
+    OAuthLoginRequest:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          writeOnly: true
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: Krótkotrwały token JWT. Traktuj go jak hasło.
+        token_type:
+          type: string
+          const: bearer
+        expires_in:
+          type: integer
+          description: Czas ważności tokenu w sekundach.
+          minimum: 1
+          example: 900
+
+    AuthenticatedUser:
+      type: object
+      required: [id, email, given_name, family_name]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        given_name:
+          type: [string, "null"]
+        family_name:
+          type: [string, "null"]
+
+    RegistrationResponse:
+      type: object
+      required: [access_token, token_type, expires_in, user]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          const: bearer
+        expires_in:
+          type: integer
+          minimum: 1
+        user:
+          $ref: "#/components/schemas/AuthenticatedUser"
+
+    ReportCategory:
+      type: string
+      enum:
+        - danger
+        - harassment
+        - poor_lighting
+        - blocked_path
+        - suspicious_activity
+        - other
+
+    ReportStatus:
+      type: string
+      enum: [active, resolved, expired, rejected]
+
+    Latitude:
+      type: number
+      minimum: -90
+      maximum: 90
+
+    Longitude:
+      type: number
+      minimum: -180
+      maximum: 180
+
+    ReportCreate:
+      type: object
+      required: [category, lat, lon]
+      properties:
+        category:
+          $ref: "#/components/schemas/ReportCategory"
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+
+    ReportUpdate:
+      type: object
+      description: |
+        Wymaga `category` i/lub obu pól `lat` i `lon`. Pusta aktualizacja
+        oraz aktualizacja z tylko jednym współrzędnym są odrzucane.
+      anyOf:
+        - required: [category]
+        - required: [lat, lon]
+      properties:
+        category:
+          $ref: "#/components/schemas/ReportCategory"
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+      allOf:
+        - if:
+            required: [lat]
+          then:
+            required: [lon]
+        - if:
+            required: [lon]
+          then:
+            required: [lat]
+
+    Report:
+      type: object
+      required:
+        - id
+        - category
+        - lat
+        - lon
+        - created_at
+        - expires_at
+        - status
+        - confirmations
+      properties:
+        id:
+          type: integer
+          format: int64
+        category:
+          $ref: "#/components/schemas/ReportCategory"
+        lat:
+          $ref: "#/components/schemas/Latitude"
+        lon:
+          $ref: "#/components/schemas/Longitude"
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: [string, "null"]
+          format: date-time
+        status:
+          $ref: "#/components/schemas/ReportStatus"
+        confirmations:
+          type: integer
+          minimum: 0
+
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+
+    HTTPValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationError"
+
+    ValidationError:
+      type: object
+      required: [loc, msg, type]
+      properties:
+        loc:
+          type: array
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+        type:
+          type: string
+        input: {}
+        ctx:
+          type: object
+          additionalProperties: true

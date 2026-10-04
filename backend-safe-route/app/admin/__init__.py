@@ -1,0 +1,1 @@
+"""Interfejs administracyjny aplikacji."""

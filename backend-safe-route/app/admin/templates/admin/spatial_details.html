@@ -1,0 +1,134 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+{% set geometry = namespace(wkt="") %}
+<div class="col-12">
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">
+        {% for pk in model_view.pk_columns -%}
+          {{ pk.name }}{% if not loop.last %};{% endif %}
+        {%- endfor %}: {{ get_object_identifier(model) }}
+      </h3>
+    </div>
+    <div class="card-body border-bottom py-3">
+      <div class="table-responsive">
+        <table class="table card-table table-vcenter text-nowrap table-hover table-bordered">
+          <thead><tr><th class="w-1">Column</th><th class="w-1">Value</th></tr></thead>
+          <tbody>
+          {% for name in model_view._details_prop_names %}
+            {% set label = model_view._column_labels.get(name, name) %}
+            {% set value, formatted_value = model_view.get_detail_value(model, name) %}
+            {% if name in model_view.spatial_fields %}
+              {% set geometry.wkt = formatted_value | string %}
+            {% endif %}
+            <tr>
+              <td>{{ label }}</td>
+              {% if name in model_view._relation_names %}
+                {% if is_list(value) %}
+                  <td>{% for elem, formatted_elem in zip(value, formatted_value) %}
+                    {% if model_view.show_compact_lists %}
+                      <a href="{{ model_view._build_url_for('admin:details', request, elem) }}">({{ formatted_elem }})</a>
+                    {% else %}
+                      <a href="{{ model_view._build_url_for('admin:details', request, elem) }}">{{ formatted_elem }}</a><br>
+                    {% endif %}
+                  {% endfor %}</td>
+                {% else %}
+                  <td><a href="{{ model_view._url_for_details_with_prop(request, model, name) }}">{{ formatted_value }}</a></td>
+                {% endif %}
+              {% else %}
+                <td>{{ formatted_value }}</td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card spatial-preview my-3"
+           data-spatial-preview
+           data-geometry-type="{{ model_view.spatial_geometry_type }}"
+           data-wkt="{{ geometry.wkt }}">
+        <div class="card-header"><h3 class="card-title mb-0">Lokalizacja na mapie</h3></div>
+        <div class="card-body"><div class="spatial-map" style="height: 420px; border-radius: 8px;"></div></div>
+      </div>
+      <div class="card-footer container">
+        <div class="row">
+          <div class="col-md-1">
+            <a href="{{ url_for('admin:list', identity=model_view.identity) }}" class="btn">Go Back</a>
+          </div>
+          {% if model_view.can_delete %}
+          <div class="col-md-1">
+            <a href="#" data-name="{{ model_view.name }}" data-pk="{{ get_object_identifier(model) }}"
+               data-url="{{ model_view._url_for_delete(request, model) }}" data-bs-toggle="modal"
+               data-bs-target="#modal-delete" class="btn btn-danger">Delete</a>
+          </div>
+          {% endif %}
+          {% if model_view.can_edit %}
+          <div class="col-md-1">
+            <a href="{{ model_view._build_url_for('admin:edit', request, model) }}" class="btn btn-primary">Edit</a>
+          </div>
+          {% endif %}
+          {% for custom_action, label in model_view._custom_actions_in_detail.items() %}
+            {% if custom_action in model_view._custom_actions_confirmation %}
+            <div class="col-md-1">
+              <a href="#" class="btn btn-secondary" data-bs-toggle="modal"
+                 data-bs-target="#modal-confirmation-{{ custom_action }}">{{ label }}</a>
+            </div>
+            {% else %}
+            <div class="col-md-1">
+              <a href="{{ model_view._url_for_action(request, custom_action) }}?pks={{ get_object_identifier(model) }}"
+                 class="btn btn-secondary">{{ label }}</a>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% if model_view.can_delete %}{% include 'sqladmin/modals/delete.html' %}{% endif %}
+{% for custom_action in model_view._custom_actions_in_detail %}
+  {% if custom_action in model_view._custom_actions_confirmation %}
+    {% with confirmation_message = model_view._custom_actions_confirmation[custom_action],
+       custom_action=custom_action,
+       url=model_view._url_for_action(request, custom_action) + '?pks=' + (get_object_identifier(model) | string) %}
+      {% include 'sqladmin/modals/details_action_confirmation.html' %}
+    {% endwith %}
+  {% endif %}
+{% endfor %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(() => {
+  const container = document.querySelector("[data-spatial-preview]");
+  if (!container || !window.L) return;
+  const map = L.map(container.querySelector(".spatial-map"));
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+  const match = /^\s*(POINT|LINESTRING)\s*\((.*)\)\s*$/i.exec(container.dataset.wkt || "");
+  const geometryType = container.dataset.geometryType;
+  const coordinates = match && match[1].toUpperCase() === geometryType
+    ? [...match[2].matchAll(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g)]
+      .map((pair) => [Number(pair[2]), Number(pair[1])])
+    : [];
+  if (!coordinates.length) {
+    container.querySelector(".spatial-map").insertAdjacentHTML(
+      "beforeend",
+      '<p class="text-danger p-3">Nie można odczytać geometrii rekordu.</p>'
+    );
+    return;
+  }
+  if (geometryType === "POINT") {
+    L.marker(coordinates[0]).addTo(map);
+    map.setView(coordinates[0], 16);
+  } else {
+    L.polyline(coordinates, {color: "#2563eb", weight: 5}).addTo(map);
+    map.fitBounds(L.latLngBounds(coordinates).pad(0.25), {maxZoom: 17});
+  }
+  window.setTimeout(() => map.invalidateSize(), 100);
+})();
+</script>
+{% endblock %}

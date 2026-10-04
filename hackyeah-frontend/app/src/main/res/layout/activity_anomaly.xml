@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#B71C1C"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="32dp">
+
+    <ImageView
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:src="@android:drawable/ic_dialog_alert"
+        android:layout_marginBottom="24dp"
+        android:contentDescription="Znak ostrzegawczy" />
+
+    <TextView
+        android:id="@+id/tv_anomaly_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="WYKRYTO NIEZWYKŁY RUCH!"
+        android:textAlignment="center"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Jeśli jesteś bezpieczna, anuluj alarm. W przeciwnym razie system automatycznie wezwie pomoc za:"
+        android:textAlignment="center"
+        android:textColor="#FFCDD2"
+        android:textSize="16sp"
+        android:layout_marginBottom="32dp" />
+
+    <TextView
+        android:id="@+id/tv_countdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="30"
+        android:textColor="#FFFFFF"
+        android:textSize="80sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="48dp" />
+
+    <Button
+        android:id="@+id/btn_im_safe"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:backgroundTint="#4CAF50"
+        android:text="JESTEM BEZPIECZNA"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

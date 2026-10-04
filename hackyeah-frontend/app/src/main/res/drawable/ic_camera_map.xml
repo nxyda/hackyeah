@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- kółko tła -->
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M24,2
+        A22,22 0,1 0,24,46
+        A22,22 0,1 0,24,2" />
+
+    <!-- korpus kamery -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M13,17
+        L20,17
+        L23,13
+        L31,13
+        L34,17
+        L38,17
+        Q40,17 40,20
+        L40,32
+        Q40,35 37,35
+        L11,35
+        Q8,35 8,32
+        L8,20
+        Q8,17 11,17
+        Z" />
+
+    <!-- obiektyw -->
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M24,20
+        A6,6 0,1 0,24,32
+        A6,6 0,1 0,24,20" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,23
+        A3,3 0,1 0,24,29
+        A3,3 0,1 0,24,23" />
+
+</vector>
